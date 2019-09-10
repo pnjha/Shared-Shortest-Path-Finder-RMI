@@ -33,8 +33,8 @@ public class Client{
         Registry reg = LocateRegistry.getRegistry(serverIp,serverPort);
         server = (ServerInterface)reg.lookup("server");
 
-        String fromUser = null;
-        int[][] graph;
+        String fromUser = null,graphName = null;
+        HashMap<Integer,HashSet<Integer>> graph = new HashMap<Integer,HashSet<Integer>>();
 
         while(true){
 
@@ -47,13 +47,27 @@ public class Client{
                 int source = -1, destination = -1;
 
                 try {
-                    source = Integer.parseInt(clientRequest[1])-1;
-                    destination = Integer.parseInt(clientRequest[2])-1;
+                    if(clientRequest.length == 3){
+
+                        graphName = "default";
+                        source = Integer.parseInt(clientRequest[1]);
+                        destination = Integer.parseInt(clientRequest[2]); 
                     
-                    server.addEdge(source,destination);
+                    }else if(clientRequest.length == 4){
+
+                        graphName = clientRequest[1];
+                        source = Integer.parseInt(clientRequest[2]);
+                        destination = Integer.parseInt(clientRequest[3]);
+                    
+                    }else{
+                        System.err.println("Invalid input format");
+                        continue; 
+                    }
+                    
+                    server.addEdge(graphName,source,destination);
 
                 }catch (Exception e) {
-                    System.err.println("Invalid source or dsetination");
+                    System.err.println("Invalid graph name or source or destination");
                 }
             
             }else if(fromUser.contains("shortest_distance")){
@@ -63,39 +77,59 @@ public class Client{
 
                 try {
 
-                    graph = server.getGraph(); 
-                
-                    source = Integer.parseInt(clientRequest[1])-1;
-                    destination = Integer.parseInt(clientRequest[2])-1;
+                    if(clientRequest.length == 3){
+
+                        graphName = "default";
+                        source = Integer.parseInt(clientRequest[1]);
+                        destination = Integer.parseInt(clientRequest[2]); 
                     
-                    int dist = shortestDistance(graph,source,destination);
+                    }else if(clientRequest.length == 4){
+
+                        graphName = clientRequest[1];
+                        source = Integer.parseInt(clientRequest[2]);
+                        destination = Integer.parseInt(clientRequest[3]);
+                    
+                    }else{
+                        System.err.println("Invalid input format");    
+                        continue;
+                    }
+            
+                    int dist = shortestDistance(graphName,source,destination);
 
                     if(dist!=-1){
-                        System.out.print("Shortest Distance between "+clientRequest[1]+" and "+clientRequest[2]+" is: ");
+                        System.out.print("Shortest Distance between "+source+" and "+destination+" is: ");
                         System.out.println(dist);
                     }else{
                         System.out.println("Nodes are not connected");
                     }
 
                 }catch (Exception e) {
-                    System.err.println("Invalid source or dsetination");
+                    System.err.println("Invalid source or destinations");
                 }
 
             }else if(fromUser.contains("get_graph")){
 
-                graph = server.getGraph();
-                int n = server.getNodeCount();
+                String[] clientRequest = fromUser.split(" ");
+                try{
+                    if(clientRequest.length == 1){
 
-                System.out.println("Current Graph Status");
-                System.out.println("");
+                        graphName = "default";
+                    
+                    }else if(clientRequest.length == 2){
 
-                for(int i = 0;i<n;i++){
-                    for(int j = 0;j<n;j++){
-                        System.out.print(graph[i][j]+" ");
+                        graphName = clientRequest[1];
+                        
+                    }else{
+                        System.err.println("Invalid input format");    
+                        continue;
                     }
-                    System.out.println("");
+                    
+                    printGraph(graphName);
+                
+                }catch(Exception e){
+                    System.err.println("Missing graph name");   
                 }
-                System.out.println("");
+
             
             }else if(fromUser.contains("exit")){
 
@@ -106,28 +140,20 @@ public class Client{
         }
     }
 
-    public static int shortestDistance(int[][] graph, int source, int destination) throws Exception{
+    public static int shortestDistance(String graphName, int source, int destination) throws Exception{
         
-        int n = server.getNodeCount();
-
-        if(source>=n || destination>=n)
-            return -1;
+        Map<Integer,HashSet<Integer>> graph = server.getGraph(graphName);
 
         boolean flag = false;
 
-        boolean[] visited = new boolean[n]; 
-        int[] distance = new int[n]; 
-        Queue<Integer> q = new LinkedList<>(); 
-          
-        for(int i = 0;i<n;i++){ 
-            visited[i] = false; 
-            distance[i] = 0; 
-        } 
+        int node,dist;
+        HashSet<Integer> visited = new HashSet<Integer>();
+        HashMap<Integer,Integer> distance = new HashMap<Integer,Integer>();
+        Queue<Integer> q = new LinkedList<>();  
               
         q.add(source);
-        
-        distance[source] = 0; 
-        visited[source] = true;
+        distance.put(source,0); 
+        visited.add(source);
        
         while(!q.isEmpty()){
 
@@ -141,24 +167,62 @@ public class Client{
                 break;
             }
 
-            for(int i=0;i<n;i++){
+            HashSet<Integer> neigh = graph.get(x);
 
-                if(visited[i] == true || graph[x][i] == 0 || i == x) 
-                    continue; 
+            Iterator<Integer> i = neigh.iterator(); 
+            while (i.hasNext()){
+                node = i.next();
+                if(visited.contains(node) || node == x)
+                    continue;
 
-                q.add(i);
-                distance[i] = distance[x] + 1; 
-                visited[i] = true; 
+                q.add(node);
+
+                if(distance.containsKey(node)){
+                    dist = distance.get(node);
+                    dist += distance.get(x)+1;
+                    distance.put(node,dist);
+                }else{
+                    distance.put(node,distance.get(x)+1);
+                }
+                    
             } 
-
-            for(int i = 0;i<n;i++)
-                System.out.print(distance[i]);
-            System.out.println();
+        
+            // for(Map.Entry<Integer,Integer> entry : distance.entrySet()){
+            //     System.out.print(entry.getKey() + ": "+ entry.getValue()+" ");
+            // }
+            System.out.println("");
         } 
 
         if(flag)
-            return distance[destination];
+            return distance.get(destination);
         
         return -1;
+    }
+
+
+    public static void printGraph(String graphName) throws Exception{
+
+        Map<Integer,HashSet<Integer>> graph = server.getGraph(graphName);
+
+        if(graph==null){
+            System.out.println("No such graph present");
+            return;
+        }
+
+        HashSet<Integer> neigh;
+
+        System.out.println("Current Graph Status");
+        System.out.println("");
+
+        for(Map.Entry<Integer,HashSet<Integer>> entry : graph.entrySet()){
+
+            neigh = entry.getValue();
+
+            Iterator<Integer> i = neigh.iterator(); 
+            while (i.hasNext()) 
+                System.out.println(entry.getKey() + " -> "+ i.next()+" "); 
+        }
+
+        System.out.println("");
     }
 }
