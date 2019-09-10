@@ -175,6 +175,7 @@ public class Client{
                 if(visited.contains(node) || node == x)
                     continue;
 
+                visited.add(node);
                 q.add(node);
 
                 if(distance.containsKey(node)){
